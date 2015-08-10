@@ -767,8 +767,15 @@ public class RecoveryManager implements Runnable {
     }
 
     private void stop() {
-        recoveryExecutor.shutdown();
-        wakeupRecoveryThread();
+        recoveryExecutor.shutdownNow();
+        try {
+            while (!recoveryExecutor.awaitTermination(30, TimeUnit.SECONDS)) {
+                log.warn("Waiting recovery thread pool to shutdown for another 30s");
+            }
+        } catch (InterruptedException e) {
+            log.error("Interrupted while waiting to shutdown recovery thread pool", e);
+        }
+
     }
 
     private boolean isNodeRecoveryDbRepairInProgress() {
