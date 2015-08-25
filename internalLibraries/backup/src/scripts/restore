@@ -30,7 +30,7 @@ validate_parameters() {
 init_variables() {
     RESTORE_DIR="/data/restore-`date +%s`"
     NODE_COUNT=`/etc/systool --getprops | awk -F '=' '/\<node_count\>/ {print $2}'`
-    LOCAL_NODE=`hostname`
+    LOCAL_NODE=`/etc/systool --getprops | awk -F '=' '/\<node_id\>/ {print $2}'`
 }
 
 upload_backup() {
@@ -45,7 +45,7 @@ upload_backup() {
 input_password() {
     while true; do
         read -p "Please input cluster password for root user: " -s ROOT_PASSWORD; echo ""
-        ssh_execute "$LOCAL_NODE" "mkdir -p $RESTORE_DIR"
+        mkdir -p $RESTORE_DIR
         if [ -d $RESTORE_DIR ]; then
             break
         else
@@ -154,9 +154,11 @@ restore_data() {
     RESTORE_RESULT="successful"
     for i in $(seq 1 $NODE_COUNT)
     do
-        local viprNode="vipr$i"
-        if [ "$LOCAL_NODE" == "standalone" ]; then
+        local viprNode
+        if [ $NODE_COUNT -eq 1 ]; then
             viprNode="$LOCAL_NODE"
+        else
+            viprNode="vipr$i"
         fi
         ls $RESTORE_DIR/*_$viprNode.* &>/dev/null
         if [ $? == 0 ]; then
@@ -181,17 +183,26 @@ purge_node() {
         initdb="no"
     fi
     local command="/opt/storageos/bin/bkutils -p $initdb"
-    ssh_execute "$viprNode" "$command"
+    if [ "$viprNode" == "$LOCAL_NODE" ]; then
+        $command &>/dev/null
+    else 
+        ssh_execute "$viprNode" "$command"
+    fi
 }
 
 restore_node() {
+    local viprNode=${1}
     cd $RESTORE_DIR
     local backupTag=`ls *_info.properties | awk '{split($0,a,"_"); print a[1]}'`
     local command="/opt/storageos/bin/bkutils -r $RESTORE_DIR $backupTag"
     if [ "$GEO_RESTORE_FROM_SCRATCH" == "true" ]; then
         command="/opt/storageos/bin/bkutils -r $RESTORE_DIR $backupTag -f"
     fi
-    ssh_execute "$viprNode" "$command"
+    if [ "$viprNode" == "$LOCAL_NODE" ]; then
+        $command &>/dev/null
+    else
+        ssh_execute "$viprNode" "$command"
+    fi
 }
 
 clean_up() {
@@ -242,15 +253,15 @@ loop_execute() {
 
     for i in $(seq 1 $NODE_COUNT)
     do
-        if [ "$LOCAL_NODE" == "standalone" ]; then
+        if [ $NODE_COUNT -eq 1 ]; then
             if [ "$includeLocal" == "true" ]; then
-                ssh_execute "$LOCAL_NODE" "$command" &
+                $command &>/dev/null &
             fi
-            break
-        fi
-        local viprNode="vipr$i"
-        if [ "$viprNode" != "$LOCAL_NODE" -o "$includeLocal" == "true" ]; then
-            ssh_execute "$viprNode" "$command" &
+        else
+            local viprNode="vipr$i"
+            if [ "$viprNode" != "$LOCAL_NODE" -o "$includeLocal" == "true" ]; then
+                ssh_execute "$viprNode" "$command" &
+            fi
         fi
     done
     wait
