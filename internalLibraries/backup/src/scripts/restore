@@ -183,11 +183,7 @@ purge_node() {
         initdb="no"
     fi
     local command="/opt/storageos/bin/bkutils -p $initdb"
-    if [ "$viprNode" == "$LOCAL_NODE" ]; then
-        $command &>/dev/null
-    else 
-        ssh_execute "$viprNode" "$command"
-    fi
+    execute_command "$viprNode" "$command"
 }
 
 restore_node() {
@@ -198,11 +194,7 @@ restore_node() {
     if [ "$GEO_RESTORE_FROM_SCRATCH" == "true" ]; then
         command="/opt/storageos/bin/bkutils -r $RESTORE_DIR $backupTag -f"
     fi
-    if [ "$viprNode" == "$LOCAL_NODE" ]; then
-        $command &>/dev/null
-    else
-        ssh_execute "$viprNode" "$command"
-    fi
+    execute_command "$viprNode" "$command"
 }
 
 clean_up() {
@@ -254,14 +246,12 @@ loop_execute() {
     for i in $(seq 1 $NODE_COUNT)
     do
         if [ $NODE_COUNT -eq 1 ]; then
-            if [ "$includeLocal" == "true" ]; then
-                $command &>/dev/null &
-            fi
+            viprNode="$LOCAL_NODE"
         else
-            local viprNode="vipr$i"
-            if [ "$viprNode" != "$LOCAL_NODE" -o "$includeLocal" == "true" ]; then
-                ssh_execute "$viprNode" "$command" &
-            fi
+            viprNode="vipr$i"
+        fi
+        if [ "$viprNode" != "$LOCAL_NODE" -o "$includeLocal" == "true" ]; then
+            execute_command "$viprNode" "$command" &
         fi
     done
     wait
@@ -272,6 +262,16 @@ ssh_execute() {
     local viprNode=${1}
     local command=${2}
     ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null svcuser@$viprNode "echo '$ROOT_PASSWORD' | sudo -S $command" &>/dev/null
+}
+
+execute_command() {
+    local viprNode=${1}
+    local command=${2}
+    if [ "$viprNode" == "$LOCAL_NODE" ]; then
+        $command &>/dev/null
+    else
+        ssh_execute "$viprNode" "$command"
+    fi
 }
 
 if [ $# -eq 1 ]; then

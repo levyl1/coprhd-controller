@@ -11,14 +11,12 @@ import java.io.FileNotFoundException;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Arrays;
-import java.util.List;
 import java.util.Properties;
+import java.util.Scanner;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.emc.storageos.services.util.FileUtils;
 import com.emc.storageos.services.util.PlatformUtils;
 import com.emc.storageos.coordinator.client.service.impl.DualInetAddress;
 import com.emc.storageos.management.backup.exceptions.BackupException;
@@ -29,7 +27,7 @@ public class RestoreManager {
 
     private static final String OUTPUT_FORMAT = "  %-40s - %s";
     private static final String PRODUCT_PATH = "/opt/storageos/etc/product";
-    private List<String> serviceNames = Arrays.asList("dbsvc", "geodbsvc", "coordinatorsvc");
+    private String[] serviceNames = new String[] {"dbsvc", "geodbsvc", "coordinatorsvc"};
 
     private RestoreHandler dbRestoreHandler;
     private RestoreHandler zkRestoreHandler;
@@ -137,7 +135,7 @@ public class RestoreManager {
         for (String serviceName : serviceNames) {
             boolean isRunning = isServiceRunning(serviceName);
             if (isRunning) {
-                log.info("{} is still running", serviceName);;
+                log.info("{} is still running", serviceName);
                 throw new IllegalStateException(serviceName + " is running");
             }
         }
@@ -148,8 +146,8 @@ public class RestoreManager {
         try {
             int pid = PlatformUtils.getServicePid(serviceName);
             log.debug("Found pid({}) of {}", pid, serviceName);
-            return (pid == 0) ? false : true;
-        } catch (FileNotFoundException e) {
+            return pid != 0;
+        } catch (Exception ex) {
             log.debug("Can't find pid of {}", serviceName);
             return false;
         }
@@ -237,15 +235,18 @@ public class RestoreManager {
             properties.load(fis);
             checkVersion(properties);
             checkHosts(properties, backupInMultiVdc);
-        } catch (Exception ex) {
+        } catch (IOException ex) {
             // Ignore this exception
             log.warn("Unable to check backup Info", ex);
         }
     }
 
-    private void checkVersion(Properties properties) throws IOException, ClassNotFoundException {
+    private void checkVersion(Properties properties) throws IOException {
         String backupVersion = properties.getProperty(BackupConstants.BACKUP_INFO_VERSION);
-        String currentVersion = (String) FileUtils.readObjectFromFile(PRODUCT_PATH);
+        String currentVersion;
+        try (Scanner scanner = new Scanner(new File(PRODUCT_PATH))) {
+            currentVersion = scanner.nextLine();
+        }
         log.info("Backup Version:  {}\nCurrent Version:  {}", backupVersion, currentVersion);
         if (!enableChangeVersion && !backupVersion.equals(currentVersion)) {
             throw new IllegalArgumentException("version is not allowed to be changed");
