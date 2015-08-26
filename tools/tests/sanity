@@ -6233,8 +6233,12 @@ restore_tests()
     echo "Uploading backup file ${filepath} to $BOURNE_IPADDR"
     SCP $BOURNE_IPADDR ${filepath} ${filepath}
 
-    echo "Restoring backup file ${filepath} on $BOURNE_IPADDR"    
-    result=`SSH $BOURNE_IPADDR "echo -e 'yes\n$password' | /opt/storageos/bin/restore '${filepath}'" | grep 'Restore'`
+    echo "Restoring backup file ${filepath} on $BOURNE_IPADDR"
+    if [ x"${DEPLOYMENT_TYPE}" == x"vipr_"* ]; then 
+        result=`SSH $BOURNE_IPADDR "echo -e 'yes\nV\n$password' | /opt/storageos/bin/restore '${filepath}'" | grep 'Restore'`
+    else
+        result=`SSH $BOURNE_IPADDR "echo -e 'yes\nC\n$password' | /opt/storageos/bin/restore '${filepath}'" | grep 'Restore'`
+    fi
     echo "$result"
     if [ "$result"x != "Restore successful!"x ]; then
         echo "Please check /opt/storageos/logs/bkutils.log for details"

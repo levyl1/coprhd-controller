@@ -31,27 +31,45 @@ init_variables() {
     RESTORE_DIR="/data/restore-`date +%s`"
     NODE_COUNT=`/etc/systool --getprops | awk -F '=' '/\<node_count\>/ {print $2}'`
     LOCAL_NODE=`/etc/systool --getprops | awk -F '=' '/\<node_id\>/ {print $2}'`
+    confirm_instance_type
+    input_password
+}
+
+confirm_instance_type() {
+    local message="This instance is ViPR or CoprHD?"
+    while true; do
+        read -p "$message(V/C)" vc
+        case $vc in
+            [Vv] ) LOGIN_USER="svcuser"; break;;
+            [Cc] ) LOGIN_USER="root"; break;;
+            * ) echo "Invalid input.";;
+        esac
+    done
+}
+
+input_password() {
+    local retryMaxNum=3
+    for i in $(seq 1 $retryMaxNum); do
+        read -p "Please input cluster password for root user: " -s ROOT_PASSWORD; echo ""
+        ssh_execute "$LOCAL_NODE" "mkdir -p $RESTORE_DIR"
+        if [ -d $RESTORE_DIR ]; then
+            break
+        else
+            echo "Password is incorrect."
+            if [ $i -ge $retryMaxNum ]; then
+                echo "Permission denied"
+                exit 1
+            fi
+        fi
+    done
 }
 
 upload_backup() {
-    input_password
     echo -n "Uploading backup files to all nodes.."
     create_restore_folder
     extract_backup_files
     copy_to_other_nodes
     echo "done"
-}
-
-input_password() {
-    while true; do
-        read -p "Please input cluster password for root user: " -s ROOT_PASSWORD; echo ""
-        mkdir -p $RESTORE_DIR
-        if [ -d $RESTORE_DIR ]; then
-            break
-        else
-            echo "Password is incorrect."
-        fi
-    done
 }
 
 create_restore_folder() {
@@ -261,7 +279,11 @@ loop_execute() {
 ssh_execute() {
     local viprNode=${1}
     local command=${2}
-    ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null svcuser@$viprNode "echo '$ROOT_PASSWORD' | sudo -S $command" &>/dev/null
+    if [ $LOGIN_USER == "root" ]; then
+        sshpass -p "$ROOT_PASSWORD" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null $LOGIN_USER@$viprNode "$command" &>/dev/null
+    else
+        ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null $LOGIN_USER@$viprNode "echo '$ROOT_PASSWORD' | sudo -S $command" &>/dev/null
+    fi
 }
 
 execute_command() {
