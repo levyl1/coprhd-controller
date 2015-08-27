@@ -28,6 +28,7 @@ validate_parameters() {
 }
 
 init_variables() {
+    BUILD_TYPE=
     RESTORE_DIR="/data/restore-`date +%s`"
     NODE_COUNT=`/etc/systool --getprops | awk -F '=' '/\<node_count\>/ {print $2}'`
     LOCAL_NODE=`/etc/systool --getprops | awk -F '=' '/\<node_id\>/ {print $2}'`
@@ -36,15 +37,14 @@ init_variables() {
 }
 
 confirm_instance_type() {
-    local message="This instance is ViPR or CoprHD?"
-    while true; do
-        read -p "$message(V/C)" vc
-        case $vc in
-            [Vv] ) LOGIN_USER="svcuser"; break;;
-            [Cc] ) LOGIN_USER="root"; break;;
-            * ) echo "Invalid input.";;
-        esac
-    done
+    if [ $BUILD_TYPE == "emc" ]; then
+        LOGIN_USER="svcuser"
+    elif [ $BUILD_TYPE == "oss" ]; then
+        LOGIN_USER="root"
+    else
+        echo "Invalid build type"
+        LOGIN_USER="root"
+    fi 
 }
 
 input_password() {
