@@ -30,6 +30,12 @@ Autoreq: 0
 /usr/bin/systemctl enable nginx
 /usr/bin/systemctl enable storageos-installer
 /etc/storageos/storageos enable
+
+getent group  storageos >&/dev/null || groupadd -g 444 storageos
+getent passwd storageos >&/dev/null || useradd -c "StorageOS" -d /opt/storageos -g 444 -u 444 -s /bin/bash -r storageos
+getent passwd svcuser >&/dev/null || useradd -c "Appliance Maintenance" -d /home/svcuser -m -u 1001 -s /usr/bin/rbash svcuser
+chmod 750 /home/svcuser
+chmod 640 /home/svcuser/.bashrc
     
 if [ -z "${DO_NOT_START}" ] ; then
     /usr/bin/systemctl stop SuSEfirewall2_init
