@@ -100,7 +100,7 @@ public class XtremIOStorageDevice extends DefaultBlockStorageDevice {
             client = getXtremIOClient(storage);
             BlockConsistencyGroup cgObj = null;
             boolean isCG = false;
-            Volume vol = volumes.get(0);            
+            Volume vol = volumes.get(0);
             if (vol.getConsistencyGroup() != null && !vol.checkForRp()) {
                 cgObj = dbClient.queryObject(BlockConsistencyGroup.class, vol.getConsistencyGroup());
                 isCG = true;
@@ -477,14 +477,14 @@ public class XtremIOStorageDevice extends DefaultBlockStorageDevice {
     @Override
     public void doResyncSnapshot(StorageSystem storage, URI volume, URI snapshot, TaskCompleter taskCompleter)
             throws DeviceControllerException {
-        _log.info("SnapShot Restore..... Started");
+        _log.info("SnapShot resync..... Started");
         List<BlockSnapshot> snapshots = dbClient.queryObject(BlockSnapshot.class, Arrays.asList(snapshot));
         if (ControllerUtils.inReplicationGroup(snapshots, dbClient)) {
             snapshotOperations.resyncGroupSnapshots(storage, volume, snapshot, taskCompleter);
         } else {
             snapshotOperations.resyncSingleVolumeSnapshot(storage, volume, snapshot, taskCompleter);
         }
-        _log.info("SnapShot Restore..... End");
+        _log.info("SnapShot resync..... End");
     }
 
     @Override
@@ -649,9 +649,11 @@ public class XtremIOStorageDevice extends DefaultBlockStorageDevice {
     }
 
     private XtremIOClient getXtremIOClient(StorageSystem system) {
-        XtremIOClient client = (XtremIOClient) xtremioRestClientFactory.getRESTClient(
-                URI.create(XtremIOConstants.getXIOBaseURI(system.getSmisProviderIP(),
-                        system.getSmisPortNumber())), system.getSmisUserName(), system.getSmisPassword(), true);
+        xtremioRestClientFactory.setModel(system.getFirmwareVersion());
+        XtremIOClient client = (XtremIOClient) xtremioRestClientFactory
+                .getRESTClient(
+                        URI.create(XtremIOConstants.getXIOBaseURI(system.getSmisProviderIP(),
+                                system.getSmisPortNumber())), system.getSmisUserName(), system.getSmisPassword(), true);
         return client;
     }
 
