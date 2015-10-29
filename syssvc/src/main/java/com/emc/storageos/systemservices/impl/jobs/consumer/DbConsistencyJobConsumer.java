@@ -14,6 +14,7 @@ import com.emc.storageos.coordinator.client.service.CoordinatorClient;
 import com.emc.storageos.coordinator.client.service.DistributedQueueItemProcessedCallback;
 import com.emc.storageos.coordinator.client.service.impl.DistributedQueueConsumer;
 import com.emc.storageos.db.client.impl.DbChecker;
+import com.emc.storageos.db.client.impl.TypeMap;
 import com.emc.storageos.db.common.DbSchemaChecker;
 import com.emc.storageos.model.db.DbConsistencyStatusRestRep.Status;
 import com.emc.storageos.systemservices.impl.jobs.DbConsistencyJob;
@@ -22,7 +23,7 @@ public class DbConsistencyJobConsumer extends DistributedQueueConsumer<DbConsist
     private static final Logger log = LoggerFactory.getLogger(DbConsistencyJobConsumer.class);
     private CoordinatorClient coordinator;
     private DbChecker dbChecker;
-    
+    private static final String[] MODEL_PACKAGES = new String[] {"com.emc.storageos.db.client.model"}; 
 
     @Override
     public void consumeItem(DbConsistencyJob job, DistributedQueueItemProcessedCallback callback) throws Exception {
@@ -40,8 +41,10 @@ public class DbConsistencyJobConsumer extends DistributedQueueConsumer<DbConsist
         }
         
         try {
+            DbSchemaChecker.checkSourceSchema(MODEL_PACKAGES);
             dbChecker.checkDataObjects(false);
             dbChecker.checkIndexingCFs(false);
+            dbChecker.checkCFIndices(false);
             status = markResult();
         } catch(Exception e) {
             log.error("failed to check db consistency {}", e);

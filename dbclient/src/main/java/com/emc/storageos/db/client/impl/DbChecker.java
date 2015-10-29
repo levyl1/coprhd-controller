@@ -4,13 +4,8 @@
  */
 
 package com.emc.storageos.db.client.impl;
-
-import com.emc.storageos.db.client.model.DataObject;
 import com.netflix.astyanax.Keyspace;
-import com.netflix.astyanax.connectionpool.OperationResult;
 import com.netflix.astyanax.connectionpool.exceptions.ConnectionException;
-
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -22,26 +17,19 @@ import com.emc.storageos.coordinator.client.model.Constants;
 import com.emc.storageos.coordinator.client.model.DbConsistencyStatus;
 import com.emc.storageos.coordinator.client.service.CoordinatorClient;
 import com.emc.storageos.db.client.impl.DbClientImpl.IndexAndCf;
-import com.emc.storageos.db.common.DbSchemaChecker;
 import com.netflix.astyanax.model.ColumnFamily;
 
 public class DbChecker {
-    private int cfCount;
     private DbClientImpl dbClient;
     private CoordinatorClient coordinator;
-    private static final String[] MODEL_PACKAGES = new String[] {"com.emc.storageos.db.client.model"}; 
-
+    private int cfCount;
+    private int indexCfCount;
+    
     public DbChecker() {
-        try {
-            DbSchemaChecker.checkSourceSchema(MODEL_PACKAGES);
-        } catch (Exception e) {
-            throw new IllegalStateException("generate schema fail");
-        }
     }
 
     public DbChecker(DbClientImpl dbClient) {
         this.dbClient = dbClient;
-        this.cfCount = TypeMap.getAllDoTypes().size();
     }
 
     /**
@@ -51,6 +39,7 @@ public class DbChecker {
      * @return number of the corrupted rows in data CFs
      */
     public int checkDataObjects(boolean toConsole) {
+        this.cfCount = TypeMap.getAllDoTypes().size();
         Collection<DataObjectType> allDoTypes = TypeMap.getAllDoTypes();
         Collection<DataObjectType> sortedTypes = getSortedTypes(allDoTypes);
         
@@ -166,7 +155,7 @@ public class DbChecker {
         dbClient.logMessage("\nStart to check INDEX data that the related object records are missing.\n", false, toConsole);
 
         Collection<IndexAndCf> idxCfs = getAllIndices().values();
-
+        this.indexCfCount = idxCfs.size();
         Map<String, ColumnFamily<String, CompositeColumnName>> objCfs = getDataObjectCFs();
         DbConsistencyStatus status = getStatusFromZk();
         dbClient.logMessage(String.format("db consistency status %s", status), false, toConsole);
@@ -224,7 +213,7 @@ public class DbChecker {
                 return corruptRowCount;
             }
             if (!toConsole) {
-                status.updateCFProgress(cfCount, doType.getCF().getName(), corruptRowCount);
+                status.updateCfIndexProgress(this.cfCount+cfCount+this.indexCfCount, doType.getCF().getName(), corruptRowCount);
                 persistStatus(status);
             }
 
