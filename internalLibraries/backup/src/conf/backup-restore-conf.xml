@@ -31,7 +31,10 @@
         <constructor-arg value="/data/db/1/data/StorageOS"/>
         <property name="extraCleanDirs">
             <list value-type="java.lang.String">
+                <value>/data/db/1/data/system</value>
+                <value>/data/db/1/data/system_traces</value>
                 <value>/data/db/1/commitlog</value>
+                <value>/data/db/1/saved_caches</value>
             </list>
         </property>
     </bean>
@@ -46,7 +49,10 @@
         <constructor-arg value="/data/geodb/1/data/GeoStorageOS"/>
         <property name="extraCleanDirs">
             <list value-type="java.lang.String">
+                <value>/data/geodb/1/data/system</value>
+                <value>/data/geodb/1/data/system_traces</value>
                 <value>/data/geodb/1/commitlog</value>
+                <value>/data/geodb/1/saved_caches</value>
             </list>
         </property>
     </bean>

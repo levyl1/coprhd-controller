@@ -12,7 +12,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.lang.Math;
 
 import com.emc.storageos.db.client.impl.DbClientContext;
 import com.emc.storageos.db.client.impl.DbClientImpl;
@@ -388,7 +387,7 @@ public class DbServiceImpl implements DbService {
         long localTimeStamp = (isDirEmpty) ? TimeUtils.getCurrentTime() : getLastModified(localDbDir).getTime();
 
         _log.info("Service timestamp in ZK is {}, local file is: {}", zkTimeStamp, localTimeStamp);
-        long diffTime = Math.abs(zkTimeStamp - localTimeStamp);
+        long diffTime = (zkTimeStamp > localTimeStamp) ? (zkTimeStamp - localTimeStamp) : 0;
         long limitTime = MAX_SERVICE_OUTAGE_TIME;
         File limitFile = new File(dbDir, "limit");
         if (limitFile.exists()) {
