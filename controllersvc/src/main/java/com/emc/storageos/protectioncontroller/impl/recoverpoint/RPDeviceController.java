@@ -958,6 +958,7 @@ public class RPDeviceController implements RPController, BlockOrchestrationInter
         RPCGExportOrchestrationCompleter completer = new RPCGExportOrchestrationCompleter(volUris, taskId);
         Workflow workflow = null;
         boolean lockException = false;
+        Map<URI, Set<URI>> exportGroupVolumesAdded = new HashMap<URI, Set<URI>>();
         try {
             // Generate the Workflow.
             workflow = _workflowService.getNewWorkflow(this,
@@ -1165,6 +1166,11 @@ public class RPDeviceController implements RPController, BlockOrchestrationInter
                     volumesToAdd.put(volumeID, ExportGroup.LUN_UNASSIGNED);
                 }
 
+                // Keep track of volumes added to export group
+                if (!volumesToAdd.isEmpty()) {
+                    exportGroupVolumesAdded.put(exportGroup.getId(), volumesToAdd.keySet());
+                }
+
                 // Persist the export group
                 if (addExportGroupToDB) {
                     exportGroup.addInitiators(initiatorSet);
@@ -1222,6 +1228,19 @@ public class RPDeviceController implements RPController, BlockOrchestrationInter
 
         } catch (Exception ex) {
             _log.error("Could not create volumes: " + volUris, ex);
+
+            // Rollback volumes that has been added/persisted to export groups
+            if (!exportGroupVolumesAdded.isEmpty()) {
+                for (Entry<URI, Set<URI>> entry : exportGroupVolumesAdded.entrySet()) {
+                    if (entry.getValue() != null && !entry.getValue().isEmpty()) {
+                        ExportGroup exportGroup = _dbClient.queryObject(ExportGroup.class, entry.getKey());
+                        _log.info(String.format("Removing volumes %s from ExportGroup %s.", entry.getValue(), entry.getKey()));
+                        exportGroup.removeVolumes(new ArrayList<URI>(entry.getValue()));
+                        _dbClient.updateObject(exportGroup);
+                    }
+                }
+            }
+
             if (workflow != null) {
                 _workflowService.releaseAllWorkflowLocks(workflow);
             }
@@ -2197,8 +2216,9 @@ public class RPDeviceController implements RPController, BlockOrchestrationInter
                         }
                     }
                 }
-            } else if (NullColumnValueGetter.isNotNullValue(volume.getPersonality()) && PersonalityTypes.SOURCE.toString().equals(volume.getPersonality()) 
-            				&& VirtualPool.vPoolSpecifiesMetroPoint(virtualPool)) {
+            } else if (NullColumnValueGetter.isNotNullValue(volume.getPersonality())
+                    && PersonalityTypes.SOURCE.toString().equals(volume.getPersonality())
+                    && VirtualPool.vPoolSpecifiesMetroPoint(virtualPool)) {
                 // We are dealing with a MetroPoint distributed volume so we need to get 2 export groups, one
                 // export group for each cluster.
                 if (volume.getAssociatedVolumes() != null &&
@@ -2277,24 +2297,24 @@ public class RPDeviceController implements RPController, BlockOrchestrationInter
 
     /*
      * RPDeviceController.exportGroupCreate()
-     * 
+     *
      * This method is a mini-orchestration of all of the steps necessary to create an export based on
      * a Bourne Snapshot object associated with a RecoverPoint bookmark.
-     * 
+     *
      * This controller does not service block devices for export, only RP bookmark snapshots.
-     * 
+     *
      * The method is responsible for performing the following steps:
      * - Enable the volumes to a specific bookmark.
      * - Call the block controller to export the target volume
-     * 
+     *
      * @param protectionDevice The RP System used to manage the protection
-     * 
+     *
      * @param exportgroupID The export group
-     * 
+     *
      * @param snapshots snapshot list
-     * 
+     *
      * @param initatorURIs initiators to send to the block controller
-     * 
+     *
      * @param token The task object
      */
     @Override
@@ -2478,19 +2498,19 @@ public class RPDeviceController implements RPController, BlockOrchestrationInter
 
     /*
      * RPDeviceController.exportGroupDelete()
-     * 
+     *
      * This method is a mini-orchestration of all of the steps necessary to delete an export group.
-     * 
+     *
      * This controller does not service block devices for export, only RP bookmark snapshots.
-     * 
+     *
      * The method is responsible for performing the following steps:
      * - Call the block controller to delete the export of the target volumes
      * - Disable the bookmarks associated with the snapshots.
-     * 
+     *
      * @param protectionDevice The RP System used to manage the protection
-     * 
+     *
      * @param exportgroupID The export group
-     * 
+     *
      * @param token The task object associated with the volume creation task that we piggy-back our events on
      */
     @Override
@@ -2603,15 +2623,15 @@ public class RPDeviceController implements RPController, BlockOrchestrationInter
 
     /*
      * Method that adds the steps to the workflow to disable image access (for BLOCK snapshots)
-     * 
+     *
      * @param workflow Workflow
-     * 
+     *
      * @param waitFor waitFor step id
-     * 
+     *
      * @param snapshots list of snapshot to disable
-     * 
+     *
      * @param rpSystem RP system
-     * 
+     *
      * @throws InternalException
      */
     private void addBlockSnapshotDisableImageAccessStep(Workflow workflow, String waitFor, List<URI> snapshots, ProtectionSystem rpSystem)
@@ -2779,24 +2799,24 @@ public class RPDeviceController implements RPController, BlockOrchestrationInter
 
     /*
      * RPDeviceController.exportAddVolume()
-     * 
+     *
      * This method is a mini-orchestration of all of the steps necessary to add a volume to an export group
      * that is based on a Bourne Snapshot object associated with a RecoverPoint bookmark.
-     * 
+     *
      * This controller does not service block devices for export, only RP bookmark snapshots.
-     * 
+     *
      * The method is responsible for performing the following steps:
      * - Enable the volumes to a specific bookmark.
      * - Call the block controller to export the target volume
-     * 
+     *
      * @param protectionDevice The RP System used to manage the protection
-     * 
+     *
      * @param exportGroupID The export group
-     * 
+     *
      * @param snapshot RP snapshot
-     * 
+     *
      * @param lun HLU
-     * 
+     *
      * @param token The task object associated with the volume creation task that we piggy-back our events on
      */
     @Override
@@ -3510,7 +3530,7 @@ public class RPDeviceController implements RPController, BlockOrchestrationInter
 
     /*
      * (non-Javadoc)
-     * 
+     *
      * @see com.emc.storageos.volumecontroller.RPController#stopProtection(java.net.URI, java.net.URI, java.lang.String)
      */
     @Override
@@ -3910,7 +3930,7 @@ public class RPDeviceController implements RPController, BlockOrchestrationInter
 
     /*
      * (non-Javadoc)
-     * 
+     *
      * @see com.emc.storageos.protectioncontroller.RPController#createSnapshot(java.net.URI, java.net.URI, java.util.List,
      * java.lang.Boolean, java.lang.Boolean, java.lang.String)
      */
@@ -4707,7 +4727,7 @@ public class RPDeviceController implements RPController, BlockOrchestrationInter
             return false;
         }
     }
-      
+
     /**
      * Disable image access for RP snapshots.
      *
@@ -4768,22 +4788,21 @@ public class RPDeviceController implements RPController, BlockOrchestrationInter
 
                     volumeWWNs.add(RPHelper.getRPWWn(targetVolume.getId(), _dbClient));
                 }
-                
+
                 // Now disable image access to that bookmark
                 RecoverPointClient rp = RPHelper.getRecoverPointClient(system);
                 MultiCopyDisableImageRequestParams request = new MultiCopyDisableImageRequestParams();
                 request.setVolumeWWNSet(volumeWWNs);
                 request.setEmName(emName);
                 if (doDisableImageCopies(snapshot)) {
-    	            MultiCopyDisableImageResponse response = rp.disableImageCopies(request);
-    	
-    	            if (response == null) {
-    	                throw DeviceControllerExceptions.recoverpoint.failedDisableAccessOnRP();
-    	            }
+                    MultiCopyDisableImageResponse response = rp.disableImageCopies(request);
+
+                    if (response == null) {
+                        throw DeviceControllerExceptions.recoverpoint.failedDisableAccessOnRP();
+                    }
                 }
             }
 
-       
             // Mark the snapshots
             StringSet snapshots = new StringSet();
             for (URI snapshotID : snapshotList) {
@@ -4815,26 +4834,27 @@ public class RPDeviceController implements RPController, BlockOrchestrationInter
             }
         }
     }
-    
+
     /**
      * It is possible that RP snapshots are exported to more than one host and hence part of more than one ExportGroup.
-     * If the same snapshot is part of more than one active ExportGroup, do not disable Image Access on the RP CG. 
-     * 
+     * If the same snapshot is part of more than one active ExportGroup, do not disable Image Access on the RP CG.
+     *
      * @param snapshot snapshot to be unexported
      * @return true if it is safe to disable image access on the CG, false otherwise
      */
-    public boolean doDisableImageCopies(BlockSnapshot snapshot) {    	
-    	  ContainmentConstraint constraint = ContainmentConstraint.
-	                Factory.getBlockObjectExportGroupConstraint(snapshot.getId());
-		  
-		  List<URI> exportGroupIdsForSnapshot = _dbClient.queryByConstraint(constraint);
-		  if (exportGroupIdsForSnapshot.size() > 1) {
-			  _log.info(String.format("Snapshot %s is in %d active exportGroups. Not safe to disable the CG", snapshot.getEmName(), exportGroupIdsForSnapshot.size()));
-			  return false;
-		  }    		
-    
-    	_log.info("Safe to disable image access on the CG");
-    	return true;
+    public boolean doDisableImageCopies(BlockSnapshot snapshot) {
+        ContainmentConstraint constraint = ContainmentConstraint.
+                Factory.getBlockObjectExportGroupConstraint(snapshot.getId());
+
+        List<URI> exportGroupIdsForSnapshot = _dbClient.queryByConstraint(constraint);
+        if (exportGroupIdsForSnapshot.size() > 1) {
+            _log.info(String.format("Snapshot %s is in %d active exportGroups. Not safe to disable the CG", snapshot.getEmName(),
+                    exportGroupIdsForSnapshot.size()));
+            return false;
+        }
+
+        _log.info("Safe to disable image access on the CG");
+        return true;
     }
 
     @Override
